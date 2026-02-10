@@ -234,29 +234,26 @@ def main():
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Регистрируем обработчики
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_error_handler(error_handler)
+    # Убрал /start чтобы не мешал, если нужен - раскомментируй
+    # app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.ALL, handle_message))
+    # Убрал error_handler чтобы не спамил уведомлениями
+    # app.add_error_handler(error_handler)
     
     # Запускаем бота
-    logger.info("Бот запускается...")
+    logger.info("🚀 Бот запускается на Railway...")
+    print("Бот активен. Ожидаю сообщения...")
     
-    # Для Railway: используем вебхук (лучше для хостинга)
-    PORT = int(os.environ.get("PORT", 8443))
-    
-    if "RAILWAY_STATIC_URL" in os.environ:
-        # На Railway - настраиваем вебхук
-        webhook_url = os.environ.get("RAILWAY_STATIC_URL") + "/webhook"
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=webhook_url,
-            url_path="webhook"
-        )
-    else:
-        # Локально - используем polling
-        print("🚀 Бот запущен локально. Нажми Ctrl+C для остановки.")
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Всегда используем polling - он проще и надёжнее
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,  # очищает очередь при перезапуске
+        close_loop=False
+    )
+
+# Запуск бота при выполнении файла
+if __name__ == "__main__":
+    main()
 
 # ==================== FLASK СЕРВЕР ДЛЯ RAILWAY ====================
 from flask import Flask
