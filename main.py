@@ -564,21 +564,3 @@ if __name__ == "__main__":
         print("1. Интернет-соединение")
         print("2. Корректность токена и API ключа в Railway Variables")
         print("3. Правильность ID пользователей")
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "pip install -r requirements.txt"
-  },
-  "deploy": {
-    "numReplicas": 1,
-    "startCommand": "python main.py",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}
-txt
-telebot==0.0.5
-Flask==2.3.3
-requests==2.31.0
-gunicorn==21.2.0
