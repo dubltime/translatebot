@@ -1,0 +1,13 @@
+toml
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "python main.py"
+port = 8443
+
+[healthcheck]
+path = "/"
+timeout = 60
+interval = 10
