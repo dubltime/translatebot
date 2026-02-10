@@ -80,7 +80,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет доступа к этому боту.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик сообщений - чистый чат без лишнего"""
+    """Обработчик ВСЕХ сообщений"""
     user_id = str(update.effective_user.id)
     
     # Игнорируем ботов и проверяем доступ
@@ -99,15 +99,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from_lang, to_lang = "estonian", "russian"
     
     try:
-        # 1. Текст
-        if update.message.text:
-            translated = translate_text(update.message.text, from_lang, to_lang)
-            await context.bot.send_message(chat_id=target_id, text=translated)
+        message = update.message
         
-        # 2. Фото с подписью
-        elif update.message.photo:
-            photo = update.message.photo[-1]
-            caption = update.message.caption
+        # 1. ТЕКСТ
+        if message.text:
+            translated = translate_text(message.text, from_lang, to_lang)
+            await context.bot.send_message(chat_id=target_id, text=translated)
+            return
+        
+        # 2. ФОТО (с подписью или без)
+        if message.photo:
+            photo = message.photo[-1]  # Самое качественное фото
+            caption = message.caption
             
             if caption:
                 translated_caption = translate_text(caption, from_lang, to_lang)
@@ -117,12 +120,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=translated_caption
                 )
             else:
-                await context.bot.send_photo(chat_id=target_id, photo=photo.file_id)
+                await context.bot.send_photo(
+                    chat_id=target_id,
+                    photo=photo.file_id
+                )
+            return
         
-        # 3. Видео с подписью
-        elif update.message.video:
-            video = update.message.video
-            caption = update.message.caption
+        # 3. ВИДЕО
+        if message.video:
+            video = message.video
+            caption = message.caption
             
             if caption:
                 translated_caption = translate_text(caption, from_lang, to_lang)
@@ -132,15 +139,72 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=translated_caption
                 )
             else:
-                await context.bot.send_video(chat_id=target_id, video=video.file_id)
+                await context.bot.send_video(
+                    chat_id=target_id,
+                    video=video.file_id
+                )
+            return
         
-        # 4. Всё остальное (документы, голосовые, стикеры) - просто пересылаем
-        else:
-            await update.message.forward(chat_id=target_id)
+        # 4. ДОКУМЕНТЫ (PDF, Word, Excel и т.д.)
+        if message.document:
+            document = message.document
+            caption = message.caption
             
+            if caption:
+                translated_caption = translate_text(caption, from_lang, to_lang)
+                await context.bot.send_document(
+                    chat_id=target_id,
+                    document=document.file_id,
+                    caption=translated_caption
+                )
+            else:
+                await context.bot.send_document(
+                    chat_id=target_id,
+                    document=document.file_id
+                )
+            return
+        
+        # 5. АУДИО / ГОЛОСОВЫЕ
+        if message.audio:
+            audio = message.audio
+            caption = message.caption
+            
+            if caption:
+                translated_caption = translate_text(caption, from_lang, to_lang)
+                await context.bot.send_audio(
+                    chat_id=target_id,
+                    audio=audio.file_id,
+                    caption=translated_caption
+                )
+            else:
+                await context.bot.send_audio(
+                    chat_id=target_id,
+                    audio=audio.file_id
+                )
+            return
+        
+        # 6. ГОЛОСОВЫЕ СООБЩЕНИЯ (отдельный тип)
+        if message.voice:
+            await context.bot.send_voice(
+                chat_id=target_id,
+                voice=message.voice.file_id
+            )
+            return
+        
+        # 7. СТИКЕРЫ
+        if message.sticker:
+            await context.bot.send_sticker(
+                chat_id=target_id,
+                sticker=message.sticker.file_id
+            )
+            return
+        
+        # 8. ВСЁ ОСТАЛЬНОЕ - просто пересылаем
+        await message.forward(chat_id=target_id)
+        
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
-        # Без уведомлений пользователю
+        logger.error(f"Ошибка отправки: {e}")
+        # Тихий режим - не спамим пользователю
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
