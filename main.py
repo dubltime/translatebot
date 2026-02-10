@@ -179,6 +179,30 @@ def main():
         # Локально - используем polling
         print("🚀 Бот запущен локально. Нажми Ctrl+C для остановки.")
         app.run_polling(allowed_updates=Update.ALL_TYPES)
+python
+# ==================== FLASK СЕРВЕР ДЛЯ RAILWAY ====================
+from flask import Flask
 
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Telegram Translation Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+# Запуск Flask в отдельном потоке, чтобы не мешать боту
+import threading
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080, debug=False)
+
+# Запускаем Flask в фоне при старте
+if "RAILWAY_ENVIRONMENT" in os.environ:
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    print("Flask server started for Railway")
 if __name__ == "__main__":
     main()
