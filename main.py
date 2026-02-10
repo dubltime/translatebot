@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 from telegram import Update
@@ -80,7 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет доступа к этому боту.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ВСЕХ сообщений"""
+    """Обработчик ВСЕХ сообщений с повторными попытками отправки"""
     user_id = str(update.effective_user.id)
     
     # Игнорируем ботов и проверяем доступ
@@ -98,31 +99,65 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_id = MY_CHAT_ID
         from_lang, to_lang = "estonian", "russian"
     
+    # Функция для повторных попыток отправки
+    async def send_with_retry(send_func, max_retries=3):
+        """Повторные попытки отправки"""
+        for attempt in range(max_retries):
+            try:
+                await send_func()
+                return True
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = 3 * (attempt + 1)
+                    logger.warning(f"Попытка {attempt+1} не удалась, жду {wait_time}сек")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"Все {max_retries} попытки не удались: {e}")
+                    # Уведомление отправителю о неудаче
+                    try:
+                        await update.message.reply_text("❌ Не удалось отправить сообщение")
+                    except:
+                        pass
+                    return False
+        return False
+    
     try:
         message = update.message
         
         # 1. ТЕКСТ
         if message.text:
             translated = translate_text(message.text, from_lang, to_lang)
-            await context.bot.send_message(chat_id=target_id, text=translated)
+            await send_with_retry(
+                lambda: context.bot.send_message(
+                    chat_id=target_id, 
+                    text=translated
+                ),
+                max_retries=3
+            )
             return
         
-        # 2. ФОТО (с подписью или без)
+        # 2. ФОТО
         if message.photo:
-            photo = message.photo[-1]  # Самое качественное фото
+            photo = message.photo[-1]
             caption = message.caption
             
             if caption:
                 translated_caption = translate_text(caption, from_lang, to_lang)
-                await context.bot.send_photo(
-                    chat_id=target_id,
-                    photo=photo.file_id,
-                    caption=translated_caption
+                await send_with_retry(
+                    lambda: context.bot.send_photo(
+                        chat_id=target_id,
+                        photo=photo.file_id,
+                        caption=translated_caption
+                    ),
+                    max_retries=2
                 )
             else:
-                await context.bot.send_photo(
-                    chat_id=target_id,
-                    photo=photo.file_id
+                await send_with_retry(
+                    lambda: context.bot.send_photo(
+                        chat_id=target_id,
+                        photo=photo.file_id
+                    ),
+                    max_retries=2
                 )
             return
         
@@ -133,77 +168,104 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if caption:
                 translated_caption = translate_text(caption, from_lang, to_lang)
-                await context.bot.send_video(
-                    chat_id=target_id,
-                    video=video.file_id,
-                    caption=translated_caption
+                await send_with_retry(
+                    lambda: context.bot.send_video(
+                        chat_id=target_id,
+                        video=video.file_id,
+                        caption=translated_caption
+                    ),
+                    max_retries=2
                 )
             else:
-                await context.bot.send_video(
-                    chat_id=target_id,
-                    video=video.file_id
+                await send_with_retry(
+                    lambda: context.bot.send_video(
+                        chat_id=target_id,
+                        video=video.file_id
+                    ),
+                    max_retries=2
                 )
             return
         
-        # 4. ДОКУМЕНТЫ (PDF, Word, Excel и т.д.)
+        # 4. ДОКУМЕНТЫ
         if message.document:
             document = message.document
             caption = message.caption
             
             if caption:
                 translated_caption = translate_text(caption, from_lang, to_lang)
-                await context.bot.send_document(
-                    chat_id=target_id,
-                    document=document.file_id,
-                    caption=translated_caption
+                await send_with_retry(
+                    lambda: context.bot.send_document(
+                        chat_id=target_id,
+                        document=document.file_id,
+                        caption=translated_caption
+                    ),
+                    max_retries=2
                 )
             else:
-                await context.bot.send_document(
-                    chat_id=target_id,
-                    document=document.file_id
+                await send_with_retry(
+                    lambda: context.bot.send_document(
+                        chat_id=target_id,
+                        document=document.file_id
+                    ),
+                    max_retries=2
                 )
             return
         
-        # 5. АУДИО / ГОЛОСОВЫЕ
+        # 5. АУДИО
         if message.audio:
             audio = message.audio
             caption = message.caption
             
             if caption:
                 translated_caption = translate_text(caption, from_lang, to_lang)
-                await context.bot.send_audio(
-                    chat_id=target_id,
-                    audio=audio.file_id,
-                    caption=translated_caption
+                await send_with_retry(
+                    lambda: context.bot.send_audio(
+                        chat_id=target_id,
+                        audio=audio.file_id,
+                        caption=translated_caption
+                    ),
+                    max_retries=2
                 )
             else:
-                await context.bot.send_audio(
-                    chat_id=target_id,
-                    audio=audio.file_id
+                await send_with_retry(
+                    lambda: context.bot.send_audio(
+                        chat_id=target_id,
+                        audio=audio.file_id
+                    ),
+                    max_retries=2
                 )
             return
         
-        # 6. ГОЛОСОВЫЕ СООБЩЕНИЯ (отдельный тип)
+        # 6. ГОЛОСОВЫЕ СООБЩЕНИЯ
         if message.voice:
-            await context.bot.send_voice(
-                chat_id=target_id,
-                voice=message.voice.file_id
+            await send_with_retry(
+                lambda: context.bot.send_voice(
+                    chat_id=target_id,
+                    voice=message.voice.file_id
+                ),
+                max_retries=2
             )
             return
         
         # 7. СТИКЕРЫ
         if message.sticker:
-            await context.bot.send_sticker(
-                chat_id=target_id,
-                sticker=message.sticker.file_id
+            await send_with_retry(
+                lambda: context.bot.send_sticker(
+                    chat_id=target_id,
+                    sticker=message.sticker.file_id
+                ),
+                max_retries=2
             )
             return
         
         # 8. ВСЁ ОСТАЛЬНОЕ - просто пересылаем
-        await message.forward(chat_id=target_id)
+        await send_with_retry(
+            lambda: message.forward(chat_id=target_id),
+            max_retries=2
+        )
         
     except Exception as e:
-        logger.error(f"Ошибка отправки: {e}")
+        logger.error(f"Критическая ошибка обработки: {e}")
         # Тихий режим - не спамим пользователю
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
