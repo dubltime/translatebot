@@ -179,7 +179,7 @@ def main():
         # Локально - используем polling
         print("🚀 Бот запущен локально. Нажми Ctrl+C для остановки.")
         app.run_polling(allowed_updates=Update.ALL_TYPES)
-python
+
 # ==================== FLASK СЕРВЕР ДЛЯ RAILWAY ====================
 from flask import Flask
 
