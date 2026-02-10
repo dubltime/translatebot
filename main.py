@@ -80,53 +80,67 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет доступа к этому боту.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик всех текстовых сообщений"""
+    """Обработчик сообщений - чистый чат без лишнего"""
     user_id = str(update.effective_user.id)
-    user_text = update.message.text
     
-    logger.info(f"Сообщение от {user_id}: {user_text}")
-    
-    # Проверяем токен
-    if not TELEGRAM_BOT_TOKEN or not DEEPSEEK_API_KEY:
-        await update.message.reply_text("⚠️ Бот не настроен. Проверьте API-ключи.")
+    # Игнорируем ботов и проверяем доступ
+    if update.effective_user.is_bot:
         return
     
-    # Определяем направление перевода
+    if user_id not in [MY_CHAT_ID, BOSS_CHAT_ID]:
+        return
+    
+    # Определяем пару для перевода
     if user_id == MY_CHAT_ID:
-        # Ты пишешь -> переводим на эстонский для начальника
-        try:
-            translated = translate_text(user_text, "russian", "estonian")
-            
-            # Отправляем перевод начальнику
-            await context.bot.send_message(
-                chat_id=BOSS_CHAT_ID,
-                text=f"🇷🇺→🇪🇪\n{translated}\n\n(От: {update.effective_user.first_name})"
-            )
-            
-            # Подтверждаем тебе
-            await update.message.reply_text(f"✅ Переведено и отправлено!\nПеревод: {translated}")
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-            
-    elif user_id == BOSS_CHAT_ID:
-        # Начальник пишет -> переводим на русский для тебя
-        try:
-            translated = translate_text(user_text, "estonian", "russian")
-            
-            # Отправляем перевод тебе
-            await context.bot.send_message(
-                chat_id=MY_CHAT_ID,
-                text=f"🇪🇪→🇷🇺\n{translated}\n\n(От: начальника)"
-            )
-            
-            # Подтверждаем начальнику
-            await update.message.reply_text(f"✅ Tõlgitud ja saadetud!\nTõlge: {translated}")
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Viga: {str(e)}")
+        target_id = BOSS_CHAT_ID
+        from_lang, to_lang = "russian", "estonian"
     else:
-        await update.message.reply_text("❌ У вас нет доступа к этому боту.")
+        target_id = MY_CHAT_ID
+        from_lang, to_lang = "estonian", "russian"
+    
+    try:
+        # 1. Текст
+        if update.message.text:
+            translated = translate_text(update.message.text, from_lang, to_lang)
+            await context.bot.send_message(chat_id=target_id, text=translated)
+        
+        # 2. Фото с подписью
+        elif update.message.photo:
+            photo = update.message.photo[-1]
+            caption = update.message.caption
+            
+            if caption:
+                translated_caption = translate_text(caption, from_lang, to_lang)
+                await context.bot.send_photo(
+                    chat_id=target_id,
+                    photo=photo.file_id,
+                    caption=translated_caption
+                )
+            else:
+                await context.bot.send_photo(chat_id=target_id, photo=photo.file_id)
+        
+        # 3. Видео с подписью
+        elif update.message.video:
+            video = update.message.video
+            caption = update.message.caption
+            
+            if caption:
+                translated_caption = translate_text(caption, from_lang, to_lang)
+                await context.bot.send_video(
+                    chat_id=target_id,
+                    video=video.file_id,
+                    caption=translated_caption
+                )
+            else:
+                await context.bot.send_video(chat_id=target_id, video=video.file_id)
+        
+        # 4. Всё остальное (документы, голосовые, стикеры) - просто пересылаем
+        else:
+            await update.message.forward(chat_id=target_id)
+            
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        # Без уведомлений пользователю
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
